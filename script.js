@@ -41,8 +41,7 @@
     //save index file
     fs.writeFile(outputPath + '/index.json', JSON.stringify(index, null, 2));
 
-    var articleSplit = text.match(/(ARTICLE\n*[\s\S]*?(?=ARTICLE|\z))/mg)
-    console.log(articleSplit[18]);
+    var articles = text.match(/(ARTICLE[\s\S]*?(?=ARTICLE|$))/g);
 
     // var split = text.split(/[\s]§/)
     // console.log(split.length);
