@@ -1,19 +1,37 @@
  var path = require('path'),
   extract = require('pdf-text-extract'),
-  fs = require('fs');
+  fs = require('fs'),
+  walk = require('walk');
 
-  var filePath = path.join(__dirname, "chapter1.pdf");
-
-  var sections = [];
-
-
-
+  // //input file
+  // var filePath = path.join(__dirname, "source/chapter1.pdf");
   var outputPath = './output';
 
+var files   = [];
+
+// Walker options
+var walker  = walk.walk('./source', { followLinks: false });
+
+
+walker.on('file', function(root, stat, next) {
+    // Add this file to the list of files
+    files.push(root + '/' + stat.name);
+    next();
+});
+
+walker.on('end', function() {
+    files.forEach(function( file ) {
+      scrape(path.join(__dirname, file))
+    })
+});
  
+  //add output directory
   if (!fs.existsSync(outputPath)){
     fs.mkdirSync(outputPath);
   }
+
+
+function scrape(filePath) {
 
   extract(filePath,  { splitPages: false }, function (err, text) {
     if (err) {
@@ -23,7 +41,7 @@
 
     //first get the chapter number and heading
 
-    var match = text.match(/CHAPTER\D+(\d)\D+\s+([A-Z]+)\s+ARTICLE/m);
+    var match = text.match(/CHAPTER\D+(\d)\D+\s+([A-Z]+)\s+ARTICLE/);
 
     var index = {
       prefix: "CHAPTER",
@@ -31,62 +49,65 @@
       heading: match[2]
     }
 
+    var chapterPath = createDirectory(index,outputPath);
 
-    //create a directory
-    var dir = outputPath + '/' + index.prefix + '-' + index.num;
-    if (!fs.existsSync(dir)){
-      fs.mkdirSync(dir);
-    }
-
-    //save index file
-    fs.writeFile(outputPath + '/index.json', JSON.stringify(index, null, 2));
-
+  
     var articles = text.match(/(ARTICLE[\s\S]*?(?=ARTICLE|$))/g);
 
-    // var split = text.split(/[\s]§/)
-    // console.log(split.length);
-
-    // for (var i=0; i<split.length; i++) {
-    //   var blob = split[i];
-
-    //   console.log(blob);
+    articles.forEach(function(article) {
      
 
-    //   //blob = blob.replace(/\r\n|\n|\r/g,'')//.replace(/ +(?= )/g,''); //get rid of newlines within the blob
-    //         //console.log(blob)
-    //   //check to make sure the blob starts with a number pattern
-    //   var startNumber = blob.match(/^(\d\d-\d\d\d.*?)\s/);  //2digits-3digits.anything between line start and space
-
-    //   if (startNumber) {
-    //     var id = startNumber[0]; 
-    //     var title = blob.match(/^\d\d-\d\d\d.*?\s(.*?[.])/)[1].trim(); //anything between section and next period.
-    //     var text = blob.split(/^\d\d-\d\d\d.*?\s(.*?[.])/)[2].replace(/\r\n|\n|\r/g,'').trim();
-
-    //     if(text.indexOf('ARTICLE') > -1) {
-    //       text = text.split('ARTICLE')[0];
-    //     }
-
-    //     if (id) {
-    //       var section = {
-    //         id: id,
-    //         title: title,
-    //         text: text
-    //       }
-
-    //       console.log(section);
-
-    //       sections.push(section);
-    //     }
-    //   }
-     
-      
-    // }
-   
-    // fs.writeFile('output.txt', JSON.stringify(sections))
-
+      //get the article number and heading
+      var match = article.match(/ARTICLE\s(\d+)\s+(.*)/);
  
 
+      var index = {
+        prefix: "ARTICLE",
+        num: match[1],
+        heading: match[2]
+      }
+
+      var articlePath = createDirectory(index, chapterPath);
+
+      var sections = article.match(/(^§[\s\S]*?(?=§|$))|(\s*?§[\s\S]*?(?=§|$))/g);
+      if (sections) {
+        sections.forEach( function(section) {
+
+          //get the section number and heading
+          var match = section.match(/§([\d-.]+)\s+([\s\S]*?)\.([\s\S]+)/);
+
+          var index = {
+            prefix: "SECTION",
+            num: match[1],
+            heading: match[2],
+            text: match[3]
+          }
+
+          createSectionFile(index, articlePath);
+        })
+      } 
+    })
 
 
-    // fs.writeFile('output.txt', text)
+    //create directory and save index file
+    function createDirectory(index, path) {
+
+      //update path
+      path = path + '/' + index.prefix + '-' + index.num;
+
+      //create a directory
+      if (!fs.existsSync(path)){
+        fs.mkdirSync(path);
+      }
+
+      //save index file
+      fs.writeFile(path + '/index.json', JSON.stringify(index, null, 2));
+
+      return path;
+    }
+
+    function createSectionFile(index, path) {
+      fs.writeFile(path + '/' + index.num + '.json', JSON.stringify(index, null, 2));
+    }
   });
+}
